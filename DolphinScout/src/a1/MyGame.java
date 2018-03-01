@@ -1,3 +1,4 @@
+
 package a1;
 //game.setState.STOPPING (this should be called instead of game.shutdown
 
@@ -51,8 +52,8 @@ public class MyGame extends VariableFrameRateGame {
 	//variable declaration for the input manager
 	private InputManager im;
 	
-	//declare scene nodes
-	private SceneNode activeNode;
+	//declare scene nodes for player views
+	private SceneNode activeNode1, activeNode2;
 	
 	private int diamondCollisionCounter = 0;
 	
@@ -95,6 +96,15 @@ public class MyGame extends VariableFrameRateGame {
 	@Override
 	protected void setupWindow(RenderSystem rs, GraphicsEnvironment ge){ 
 		rs.createRenderWindow(new DisplayMode(1000, 700, 24, 60), false);
+		Viewport view1, view2;
+		int left, right, top, bottom, middle;
+		left = rs.getRenderWindow().getLocationLeft();
+		right = rs.getRenderWindow().getWidth();
+		top = rs.getRenderWindow().getLocationTop();
+		bottom = rs.getRenderWindow().getHeight();
+		middle = bottom/2;
+		//view1.setDimensions(middle, left, right, top);
+		//view2.setDimensions(bottom, left, right, middle);
 	}
 		
 	
@@ -104,21 +114,29 @@ public class MyGame extends VariableFrameRateGame {
 	protected void setupCameras(SceneManager sm, RenderWindow rw) {
 		//create a SceneNode which is the root
 		SceneNode rootNode = sm.getRootSceneNode();
-		//create a camera object "MainCamera"
-		Camera camera = sm.createCamera("MainCamera", Projection.PERSPECTIVE);
+		//create camera node with will be parent of all camera nodes
+		SceneNode cameraParentNode = rootNode.createChildSceneNode("cameraParentNode");
+		//create a camera object for player1 and player2
+		Camera camera1 = sm.createCamera("playerCamera1", Projection.PERSPECTIVE);
+		Camera camera2 = sm.createCamera("playerCamera2", Projection.PERSPECTIVE);
 		//set camera's viewport
-		rw.getViewport(0).setCamera(camera);
-		camera.setRt((Vector3f)Vector3f.createFrom(1.0f, 0.0f, 0.0f));
-		camera.setUp((Vector3f)Vector3f.createFrom(0.0f, 1.0f, 0.0f));
-		camera.setFd((Vector3f)Vector3f.createFrom(0.0f, 0.0f, -1.0f));
-		camera.setPo((Vector3f)Vector3f.createFrom(0.0f, 0.0f, 0.0f));
+		rw.getViewport(0).setCamera(camera1);
+		camera1.setRt((Vector3f)Vector3f.createFrom(1.0f, 0.0f, 0.0f));
+		camera1.setUp((Vector3f)Vector3f.createFrom(0.0f, 1.0f, 0.0f));
+		camera1.setFd((Vector3f)Vector3f.createFrom(0.0f, 0.0f, -1.0f));
+		camera1.setPo((Vector3f)Vector3f.createFrom(0.0f, 0.0f, 0.0f));
 		//create node that the camera will be attached to
-		SceneNode cameraNode = rootNode.createChildSceneNode(camera.getName()+"Node");
+		SceneNode cameraNode1 = cameraParentNode.createChildSceneNode(camera1.getName() + "Node");
+		SceneNode cameraNode2 = cameraParentNode.createChildSceneNode(camera2.getName() + "Node");
 		//attach camera to the cameraNode
-		cameraNode.attachObject(camera);
+		cameraNode1.attachObject(camera1);
+		cameraNode2.attachObject(camera2);
 		//set camera's view mode to perspective of cameraNode
-		camera.setMode('r');
-		cameraNode.moveLeft(0.5f);
+		camera1.setMode('r');
+		camera2.setMode('r');
+		//initial position for camera nodes
+		cameraNode1.moveLeft(0.5f);
+		cameraNode2.moveRight(0.5f);
 		
 	}
 	
@@ -134,7 +152,7 @@ public class MyGame extends VariableFrameRateGame {
 		createDolphin(eng, sm);
 		
 		//set the active node to the camera node
-		activeNode = this.getEngine().getSceneManager().getSceneNode("MainCameraNode");
+		activeNode1 = this.getEngine().getSceneManager().getSceneNode("MainCameraNode");
 		
 		//set the scene's ambient lighting
 		sm.getAmbientLight().setIntensity(new Color(.1f, .1f, .1f));
@@ -568,10 +586,10 @@ public class MyGame extends VariableFrameRateGame {
 	
 	//functions to manipulate currently active node
 	public SceneNode getActiveNode() {
-		return activeNode;
+		return activeNode1;
 	}
 	public void setActiveNode(SceneNode node) {
-		activeNode = node;
+		activeNode1 = node;
 	}
 	//function to generate random floats within a range for random distributions
 	public float randFloat(float min, float max) {
