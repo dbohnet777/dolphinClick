@@ -10,6 +10,8 @@ import java.nio.IntBuffer;
 import java.util.ArrayList;
 import java.util.Random;
 
+import myGameEngine.Camera3pController;
+import myGameEngine.DolphinNodeController;
 import myGameEngine.DownPitchAction;
 import myGameEngine.LeftYawAction;
 import myGameEngine.MountDismountDolphin;
@@ -17,6 +19,7 @@ import myGameEngine.MoveBackwardAction;
 import myGameEngine.MoveForwardAction;
 import myGameEngine.MoveLeftAction;
 import myGameEngine.MoveRightAction;
+import myGameEngine.OrbitModeAction;
 import myGameEngine.QuitGameAction;
 import myGameEngine.RightYawAction;
 import myGameEngine.UpPitchAction;
@@ -47,10 +50,13 @@ public class MyGame extends VariableFrameRateGame {
 	float elapsTime = 0.0f;
 	String elapsTimeStr, counterStr, dispStr;
 	int elapsTimeSec, counter = 0;
-	public boolean onDolphin = false;	//boolean flag to keep track which node camera is attached to
+	public boolean onDolphin = true;	//boolean flag to keep track which node camera is attached to
+	private boolean orbitMode = true;   //true = the camera orbit is independent of the dolphin heading
 	
 	//variable declaration for the input manager
 	private InputManager im;
+	private Camera3pController orbitController;
+	private DolphinNodeController dolphinController;
 	
 	//declare scene nodes for player views
 	private SceneNode activeNode1, activeNode2;
@@ -66,7 +72,12 @@ public class MyGame extends VariableFrameRateGame {
 	
 	public MyGame() {
 		super();
-		System.out.println("This is where contol info can be put to display on the console");
+		System.out.println("Player Controls:\n"
+				+ "W - Move Forward         S - Move Backward\n"
+				+ "A - Move Left            D - Move Right\n"
+				+ "Left Arrow - Turn Left   Right Arrow - Turn Right\n"
+				+ "SPACE - Mount/Dismound Dolphin\n"
+				+ "ESC - Exit Game\n");
 	}
 
 //--------------------------------------------------------------------------------------//	
@@ -96,15 +107,6 @@ public class MyGame extends VariableFrameRateGame {
 	@Override
 	protected void setupWindow(RenderSystem rs, GraphicsEnvironment ge){ 
 		rs.createRenderWindow(new DisplayMode(1000, 700, 24, 60), false);
-		Viewport view1, view2;
-		int left, right, top, bottom, middle;
-		left = rs.getRenderWindow().getLocationLeft();
-		right = rs.getRenderWindow().getWidth();
-		top = rs.getRenderWindow().getLocationTop();
-		bottom = rs.getRenderWindow().getHeight();
-		middle = bottom/2;
-		//view1.setDimensions(middle, left, right, top);
-		//view2.setDimensions(bottom, left, right, middle);
 	}
 		
 	
@@ -112,19 +114,32 @@ public class MyGame extends VariableFrameRateGame {
 	
 	@Override
 	protected void setupCameras(SceneManager sm, RenderWindow rw) {
+		Viewport view1 = rw.createViewport(0.51f, 0.005f, 0.995f, 0.99f);
+		Viewport view2 = rw.createViewport(0.01f, 0.005f, 0.995f, 0.49f);
+
 		//create a SceneNode which is the root
 		SceneNode rootNode = sm.getRootSceneNode();
 		//create camera node with will be parent of all camera nodes
 		SceneNode cameraParentNode = rootNode.createChildSceneNode("cameraParentNode");
 		//create a camera object for player1 and player2
-		Camera camera1 = sm.createCamera("playerCamera1", Projection.PERSPECTIVE);
-		Camera camera2 = sm.createCamera("playerCamera2", Projection.PERSPECTIVE);
+		Camera camera1 = sm.createCamera("playerCamera1", Camera.Frustum.Projection.PERSPECTIVE);
+		Camera camera2 = sm.createCamera("playerCamera2", Camera.Frustum.Projection.PERSPECTIVE);
+		camera1.getFrustum().setNearClipDistance(0.1f);
+		camera2.getFrustum().setNearClipDistance(0.1f);
 		//set camera's viewport
-		rw.getViewport(0).setCamera(camera1);
+		view1.setCamera(camera1);
+		view2.setCamera(camera2);
+		
+		
+		
 		camera1.setRt((Vector3f)Vector3f.createFrom(1.0f, 0.0f, 0.0f));
 		camera1.setUp((Vector3f)Vector3f.createFrom(0.0f, 1.0f, 0.0f));
 		camera1.setFd((Vector3f)Vector3f.createFrom(0.0f, 0.0f, -1.0f));
 		camera1.setPo((Vector3f)Vector3f.createFrom(0.0f, 0.0f, 0.0f));
+		camera2.setRt((Vector3f)Vector3f.createFrom(1.0f, 0.0f, 0.0f));
+		camera2.setUp((Vector3f)Vector3f.createFrom(0.0f, 1.0f, 0.0f));
+		camera2.setFd((Vector3f)Vector3f.createFrom(0.0f, 0.0f, -1.0f));
+		camera2.setPo((Vector3f)Vector3f.createFrom(0.0f, 0.0f, 0.0f));
 		//create node that the camera will be attached to
 		SceneNode cameraNode1 = cameraParentNode.createChildSceneNode(camera1.getName() + "Node");
 		SceneNode cameraNode2 = cameraParentNode.createChildSceneNode(camera2.getName() + "Node");
@@ -132,11 +147,11 @@ public class MyGame extends VariableFrameRateGame {
 		cameraNode1.attachObject(camera1);
 		cameraNode2.attachObject(camera2);
 		//set camera's view mode to perspective of cameraNode
-		camera1.setMode('r');
-		camera2.setMode('r');
+		camera1.setMode('n');
+		camera2.setMode('n');
 		//initial position for camera nodes
-		cameraNode1.moveLeft(0.5f);
-		cameraNode2.moveRight(0.5f);
+		//cameraNode1.moveLeft(0.5f);
+		//cameraNode2.moveRight(0.5f);
 		
 	}
 	
@@ -145,14 +160,17 @@ public class MyGame extends VariableFrameRateGame {
 
 	@Override
 	protected void setupScene(Engine eng, SceneManager sm) throws IOException {
-		//run function to setup inputs
-		setupInputs();
+		//create an input manager im
+		im = new GenericInputManager();
 		
 		//create the dolphin entity
-		createDolphin(eng, sm);
+		Node dolphinParentNode = sm.getRootSceneNode().createChildSceneNode("dolphinParentNode");
+		createDolphin1(eng, sm);
+		createDolphin2(eng, sm);
 		
 		//set the active node to the camera node
-		activeNode1 = this.getEngine().getSceneManager().getSceneNode("MainCameraNode");
+		activeNode1 = this.getEngine().getSceneManager().getSceneNode("playerCamera1Node");
+		activeNode2 = this.getEngine().getSceneManager().getSceneNode("playerCamera2Node");
 		
 		//set the scene's ambient lighting
 		sm.getAmbientLight().setIntensity(new Color(.1f, .1f, .1f));
@@ -177,24 +195,27 @@ public class MyGame extends VariableFrameRateGame {
 		//Create ground plane
 		ManualObject groundPlane = makeGroundPlane(eng, sm);
 		SceneNode groundPlaneN = sm.getRootSceneNode().createChildSceneNode("groundPlaneNode");
-		groundPlaneN.scale(500.0f, 1.0f, 500.0f);
+		groundPlaneN.scale(100.0f, 1.0f, 100.0f);
 		groundPlaneN.moveBackward(10.0f);
-		groundPlaneN.moveLeft(250.0f);
+		groundPlaneN.moveLeft(50.0f);
 		groundPlaneN.moveDown(0.5f);
 		groundPlaneN.attachObject(groundPlane);
+		//create parent diamond node for diamond objects
+		SceneNode diamondParentNode = sm.getRootSceneNode().createChildSceneNode("diamondParentNode");
+		SceneNode earthParentNode = sm.getRootSceneNode().createChildSceneNode("earthParentNode");
 		//create a manual diamond objects and attach them to diamond nodes
 		for(int i = 0; i < 20; i++) {
 			//randomly generated scale multiplier for diamond objects
 			float randScaleD = randFloat(0.2f, 0.5f);
 			//randomly generated x y and z coordinates for diamond objects
-			float randPosXD = randFloat(0.0f, 200.0f);
+			float randPosXD = randFloat(0.0f, 100.0f);
 			//float randPosYD = randFloat(-20.0f, 20.0f);
-			float randPosZD = randFloat(0.0f, 200.0f);
+			float randPosZD = randFloat(0.0f, 100.0f);
 			
 			//create this diamond object I
 			ManualObject diamond = makeDiamond(eng, sm, i);
 			//create a diamond node and label it diamond#Node and attach it to the root scene node
-			SceneNode diamondN = sm.getRootSceneNode().createChildSceneNode("diamond" + i + "Node");
+			SceneNode diamondN = diamondParentNode.createChildSceneNode("diamond" + i + "Node");
 			//scale and position this node randomly
 			diamondN.scale(randScaleD, randScaleD, randScaleD);
 			diamondN.moveForward(randPosXD);
@@ -209,14 +230,14 @@ public class MyGame extends VariableFrameRateGame {
 			//randomly generated scale multiplier for earth objects
 			float randScaleE = randFloat(0.5f, 1.0f);
 			//randomly generated x y and z coordinates for earth objects
-			float randPosXE = randFloat(0.0f, 200.0f);
+			float randPosXE = randFloat(0.0f, 100.0f);
 			//float randPosYE = randFloat(-20.0f, 20.0f);
-			float randPosZE = randFloat(0.0f, 200.0f);
+			float randPosZE = randFloat(0.0f, 100.0f);
 			
 			//create earth object I
 			// set up earth
 			Entity earthE = makeEarth(eng, sm, i);
-			SceneNode earthN = sm.getRootSceneNode().createChildSceneNode(earthE.getName() + "Node");
+			SceneNode earthN = earthParentNode.createChildSceneNode(earthE.getName() + "Node");
 			earthN.attachObject(earthE);
 			earthN.scale(randScaleE, randScaleE, randScaleE);
 			earthN.moveForward(randPosXE);
@@ -225,13 +246,35 @@ public class MyGame extends VariableFrameRateGame {
 			rc2.addNode(earthN);
 		}		
 		//set up box object
-		SceneNode boxNode = sm.getRootSceneNode().createChildSceneNode("boxNode");
+		/*SceneNode boxNode = sm.getRootSceneNode().createChildSceneNode("boxNode");
 		boxNode.attachObject(makeBox(eng, sm));
-		rc2.addNode(boxNode);
+		rc2.addNode(boxNode);*/
+		
+		//set up the orbit camera for the dolphins
+		setupOrbitCameras(eng, sm);
+		
+		//run function to setup inputs
+		setupInputs(sm);
+		//set both dolphin's initial yaw
+		sm.getRootSceneNode().getChild("dolphinParentNode").getChild("dolphin1Node").yaw(Degreef.createFrom(45.0f));
+		sm.getRootSceneNode().getChild("dolphinParentNode").getChild("dolphin2Node").yaw(Degreef.createFrom(45.0f));
+
+		//rc1.addNode(diamondParentNode);
 	}
 
 //--------------------------------------------------------------------------------------//	
 
+	protected void setupOrbitCameras(Engine eng, SceneManager sm) {
+		Camera camera1 = sm.getCamera("playerCamera1");
+		Camera camera2 = sm.getCamera("playerCamera2");
+		SceneNode cameraParentNode = sm.getSceneNode("cameraParentNode");
+		SceneNode dolphinParentNode = sm.getSceneNode("dolphinParentNode");
+		//add another gamepad for player 2
+		String kbName = im.getKeyboardName();
+		//String gpName = im.getFirstGamepadName();
+		orbitController = new Camera3pController(getOrbitMode(), camera1, cameraParentNode, dolphinParentNode, kbName, im);
+	}
+	
 	@Override
 	protected void update(Engine engine) {
 		// build and set HUD
@@ -247,25 +290,30 @@ public class MyGame extends VariableFrameRateGame {
 		//update the input manager
 		im.update(elapsTime);
 		
+		//update both camera's position
+		orbitController.updateCameraPosition();
+		//orbitController2.updateCameraPosition();
+
+		
 		//if player is off dolphin check how far away they are to snap them back if they get too far away
-		if(getActiveNode().getName().equals("MainCameraNode")) {
+		if(getActiveNode().getName().equals("playerCamera1Node")) {
 			//distance vector gets distance from player to dolphin
 			
 			//I did the distance method in the ugliest way humanly possible 
-			distance = (Vector3f) checkObjCollision(engine.getSceneManager().getSceneNode("MainCameraNode"), engine.getSceneManager().getSceneNode("dolphinNode"));
+			distance = (Vector3f) checkObjCollision(engine.getSceneManager().getSceneNode("playerCamera1Node"), engine.getSceneManager().getSceneNode("dolphin1Node"));
 			//check a range to see if player has gone out of bounds
 			if(distance.x() > 5.0f || distance.x() < -5.0f || distance.y() > 5.0f && distance.y() < -5.0f || distance.z() > 5.0f || distance.z() < -5.0f) {
 				//place player next to dolphin
-				engine.getSceneManager().getSceneNode("MainCameraNode").setLocalPosition(engine.getSceneManager().getSceneNode("dolphinNode").getLocalPosition().add(Vector3f.createFrom(0.3f, 0.3f, 0.0f)));
+				engine.getSceneManager().getSceneNode("playerCamera1Node").setLocalPosition(engine.getSceneManager().getSceneNode("dolphin1Node").getLocalPosition().add(Vector3f.createFrom(0.3f, 0.3f, 0.0f)));
 			}
 		}
 		
 		//check if player has collided with a diamond
-		if(getActiveNode().getName().equals("MainCameraNode")) {
+		if(getActiveNode().getName().equals("playerCamera1Node")) {
 			for(int i = 0; i < diamonds.size(); i++) {
 				
 				if(ints[i] != -1) {
-					distance = (Vector3f) checkObjCollision(engine.getSceneManager().getSceneNode("MainCameraNode"), engine.getSceneManager().getSceneNode("diamond" + i + "Node"));
+					distance = (Vector3f) checkObjCollision(engine.getSceneManager().getSceneNode("playerCamera1Node"), engine.getSceneManager().getSceneNode("diamond" + i + "Node"));
 				}
 				if(distance.x() > -0.2f && distance.x() < 0.2f && distance.y() > -0.2f && distance.y() < 0.2f && distance.z() > -0.2f && distance.z() < 0.2 && ints[i] != -1) {
 					
@@ -278,31 +326,38 @@ public class MyGame extends VariableFrameRateGame {
 		}
 		
 		//check if player has collided with the box
-		if(getActiveNode().getName().equals("MainCameraNode")) {
-			distance = (Vector3f) checkObjCollision(engine.getSceneManager().getSceneNode("MainCameraNode"), engine.getSceneManager().getSceneNode("boxNode"));
+		/*if(getActiveNode().getName().equals("playerCamera1Node")) {
+			distance = (Vector3f) checkObjCollision(engine.getSceneManager().getSceneNode("playerCamera1Node"), engine.getSceneManager().getSceneNode("boxNode"));
 
 			if(distance.x() > -0.3f && distance.x() < 0.3f && distance.y() > -0.3f && distance.y() < 0.3f && distance.z() > -0.3f && distance.z() < 0.3) {
 				diamondCollisionCounter = 0;
 			}
-		}
+		}*/
 	}
 	
 //--------------------------------------------------------------------------------------//	
-	public void setupInputs() {		//update controller inputs
-		//create an input manager im
-		im = new GenericInputManager();
-		
+	public void setupInputs(SceneManager sm) {		//update controller inputs
+
+
+		SceneNode dolphinParentNode = sm.getSceneNode("dolphinParentNode");
+		//add another gamepad for player 2
 		String kbName = im.getKeyboardName();
-		String gpName = im.getFirstGamepadName();
+		//String gpName = im.getFirstGamepadName();
+		dolphinController = new DolphinNodeController(dolphinParentNode, kbName, im);
 		// build some action objects for doing things in response to user input
 		QuitGameAction quitGameAction = new QuitGameAction(this);
-		MountDismountDolphin mountDismountAction = new MountDismountDolphin(this, onDolphin);
-		MoveForwardAction moveForwardAction = new MoveForwardAction(this);
+		im.associateAction(kbName, net.java.games.input.Component.Identifier.Key.ESCAPE, quitGameAction, InputManager.INPUT_ACTION_TYPE.ON_PRESS_ONLY);
+		OrbitModeAction orbitModeAction = new OrbitModeAction(this);
+		im.associateAction(kbName, net.java.games.input.Component.Identifier.Key.SPACE, orbitModeAction, InputManager.INPUT_ACTION_TYPE.ON_PRESS_ONLY);
+		/*
+		//MountDismountDolphin mountDismountAction = new MountDismountDolphin(this, onDolphin);
+		MoveForwardAction moveForwardAction1 = new MoveForwardAction(this, activeNode1);
+		MoveForwardAction moveForwardAction2 = new MoveForwardAction(this, activeNode2);
 		MoveBackwardAction moveBackwardAction = new MoveBackwardAction(this);
 		MoveLeftAction moveLeftAction = new MoveLeftAction(this);
 		MoveRightAction moveRightAction = new MoveRightAction(this);
-		UpPitchAction upPitchAction = new UpPitchAction(this);
-		DownPitchAction downPitchAction = new DownPitchAction(this);
+		//UpPitchAction upPitchAction = new UpPitchAction(this);
+		//DownPitchAction downPitchAction = new DownPitchAction(this);
 		LeftYawAction leftYawAction = new LeftYawAction(this);
 		RightYawAction rightYawAction = new RightYawAction(this);
 		//incrementCounterAction = new IncrementCounterAction(this);
@@ -312,7 +367,7 @@ public class MyGame extends VariableFrameRateGame {
 		//quit action
 		im.associateAction(kbName, net.java.games.input.Component.Identifier.Key.ESCAPE, quitGameAction, InputManager.INPUT_ACTION_TYPE.ON_PRESS_ONLY);
 		//move forward
-		im.associateAction(kbName, net.java.games.input.Component.Identifier.Key.W, moveForwardAction, InputManager.INPUT_ACTION_TYPE.REPEAT_WHILE_DOWN);
+		im.associateAction(kbName, net.java.games.input.Component.Identifier.Key.W, moveForwardAction1, InputManager.INPUT_ACTION_TYPE.REPEAT_WHILE_DOWN);
 		//move backward
 		im.associateAction(kbName, net.java.games.input.Component.Identifier.Key.S, moveBackwardAction, InputManager.INPUT_ACTION_TYPE.REPEAT_WHILE_DOWN);
 		//move left
@@ -328,14 +383,14 @@ public class MyGame extends VariableFrameRateGame {
 		//yaw right
 		im.associateAction(kbName, net.java.games.input.Component.Identifier.Key.RIGHT, rightYawAction, InputManager.INPUT_ACTION_TYPE.REPEAT_WHILE_DOWN);		
 		//mount/dismount dolphin
-		im.associateAction(kbName, net.java.games.input.Component.Identifier.Key.SPACE, mountDismountAction, InputManager.INPUT_ACTION_TYPE.ON_PRESS_ONLY);
+		//im.associateAction(kbName, net.java.games.input.Component.Identifier.Key.SPACE, mountDismountAction, InputManager.INPUT_ACTION_TYPE.ON_PRESS_ONLY);
 		
 		// attach the action objects to gamepad components
 		if(gpName != null) {
 			//x button(_2) moves player on and off dolphin
-			im.associateAction(gpName, net.java.games.input.Component.Identifier.Button._2, mountDismountAction, InputManager.INPUT_ACTION_TYPE.ON_PRESS_ONLY);
+			//im.associateAction(gpName, net.java.games.input.Component.Identifier.Button._2, mountDismountAction, InputManager.INPUT_ACTION_TYPE.ON_PRESS_ONLY);
 			//move forward (x axis)
-			im.associateAction(gpName, net.java.games.input.Component.Identifier.Button.Y, moveForwardAction, InputManager.INPUT_ACTION_TYPE.REPEAT_WHILE_DOWN);
+			im.associateAction(gpName, net.java.games.input.Component.Identifier.Button.Y, moveForwardAction1, InputManager.INPUT_ACTION_TYPE.REPEAT_WHILE_DOWN);
 	
 			im.associateAction(gpName, net.java.games.input.Component.Identifier.Button.Y, moveBackwardAction, InputManager.INPUT_ACTION_TYPE.REPEAT_WHILE_DOWN);
 	
@@ -352,19 +407,31 @@ public class MyGame extends VariableFrameRateGame {
 			im.associateAction(gpName, net.java.games.input.Component.Identifier.Button.Z, rightYawAction, InputManager.INPUT_ACTION_TYPE.REPEAT_WHILE_DOWN);
 	
 			im.associateAction(gpName, net.java.games.input.Component.Identifier.Button._10, quitGameAction, InputManager.INPUT_ACTION_TYPE.ON_PRESS_ONLY);
-		}
+		}*/
 	}
 	
-	public void createDolphin(Engine e, SceneManager sm) throws IOException{
+	public void createDolphin1(Engine e, SceneManager sm) throws IOException{
 		//create the dolphin entity and place it into the scene		
-		Entity dolphinE = sm.createEntity("dolphin", "dolphinHighPoly.obj");
+		Entity dolphinE = sm.createEntity("dolphin1", "dolphinHighPoly1.obj");
 		dolphinE.setPrimitive(Primitive.TRIANGLES);
-		SceneNode dolphinNode = sm.getRootSceneNode().createChildSceneNode(dolphinE.getName() + "Node");
-		dolphinNode.attachObject(dolphinE);
+		SceneNode dolphin1Node = sm.getSceneNode("dolphinParentNode").createChildSceneNode(dolphinE.getName() + "Node");
+		dolphin1Node.attachObject(dolphinE);
 		
 		//create node for riding the dolphin directly above the dolphin node
-		SceneNode onDolphinNode = sm.getSceneNode("dolphinNode").createChildSceneNode("onDolphinNode");
-		onDolphinNode.setLocalPosition(0.0f, 1.0f, 0.0f);
+		SceneNode onDolphin1Node = sm.getSceneNode("dolphin1Node").createChildSceneNode("onDolphin1Node");
+		onDolphin1Node.setLocalPosition(5.0f, 1.0f, 0.0f);
+	}
+	public void createDolphin2(Engine e, SceneManager sm) throws IOException{
+		//create the dolphin entity and place it into the scene		
+		Entity dolphinE = sm.createEntity("dolphin2", "dolphinHighPoly2.obj");
+		dolphinE.setPrimitive(Primitive.TRIANGLES);
+		SceneNode dolphin2Node = sm.getSceneNode("dolphinParentNode"
+				+ "").createChildSceneNode(dolphinE.getName() + "Node");
+		dolphin2Node.attachObject(dolphinE);
+		
+		//create node for riding the dolphin directly above the dolphin node
+		SceneNode onDolphin2Node = sm.getSceneNode("dolphin2Node").createChildSceneNode("onDolphin2Node");
+		onDolphin2Node.setLocalPosition(-5.0f, 1.0f, 0.0f);
 	}
 	
 	protected ManualObject makeDiamond(Engine e, SceneManager sm, int objNum) throws IOException{
@@ -577,9 +644,9 @@ public class MyGame extends VariableFrameRateGame {
 		
 	}
 	public void checkSnapToDolphin(Engine e) throws IOException{
-		if(getActiveNode().getName().equals("MainCameraNode")) {
-			if(checkObjCollision(e.getSceneManager().getSceneNode("MainCameraNode"), e.getSceneManager().getSceneNode("dolphinNode"))){
-				e.getSceneManager().getSceneNode("MainCameraNode").setLocalPosition(e.getSceneManager().getSceneNode("dolphinNode").getLocalPosition().add(Vector3f.createFrom(-0.3f, 0.2f, 0.0f)));
+		if(getActiveNode().getName().equals("playerCamera1Node")) {
+			if(checkObjCollision(e.getSceneManager().getSceneNode("playerCamera1Node"), e.getSceneManager().getSceneNode("dolphinNode"))){
+				e.getSceneManager().getSceneNode("playerCamera1Node").setLocalPosition(e.getSceneManager().getSceneNode("dolphinNode").getLocalPosition().add(Vector3f.createFrom(-0.3f, 0.2f, 0.0f)));
 			}
 		}
 	}*/
@@ -596,5 +663,12 @@ public class MyGame extends VariableFrameRateGame {
 		Random rng = new Random();
 		float randomVal = min + rng.nextFloat() * (max - min);
 		return randomVal;
+	}
+	
+	public void switchOrbitMode() {
+		orbitMode = !orbitMode;
+	}
+	public boolean getOrbitMode() {
+		return orbitMode;
 	}
 }

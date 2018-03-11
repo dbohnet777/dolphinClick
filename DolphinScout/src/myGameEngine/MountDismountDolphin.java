@@ -27,20 +27,20 @@ public class MountDismountDolphin extends AbstractInputAction{
 	public void performAction(float time, Event e) {
 		if(onDolphin) {
 			//detach child nodes from the dolphin entity node
-			sm.getSceneNode("onDolphinNode").detachAllChildren();
+			sm.getSceneNode("onDolphin1Node").detachAllChildren();
 			//set the offDolphinNode's position and rotation to be the same as the dolphin
-			sm.getSceneNode("MainCameraNode").setLocalRotation(sm.getSceneNode("dolphinNode").getLocalRotation());
-			sm.getSceneNode("MainCameraNode").setLocalPosition(sm.getSceneNode("dolphinNode").getLocalPosition().add(dismount));
+			sm.getSceneNode("playerCamera1Node").setLocalRotation(sm.getSceneNode("dolphin1Node").getLocalRotation());
+			sm.getSceneNode("playerCamera1Node").setLocalPosition(sm.getSceneNode("dolphin1Node").getLocalPosition().add(dismount));
 			//make the current active node the off dolphin node
-			game.setActiveNode(sm.getSceneNode("MainCameraNode"));			
+			game.setActiveNode(sm.getSceneNode("playerCamera1Node"));			
 		}
 		else {
-			sm.getSceneNode("onDolphinNode").attachChild(game.getEngine().getSceneManager().getSceneNode("MainCameraNode"));
+			sm.getSceneNode("onDolphin1Node").attachChild(game.getEngine().getSceneManager().getSceneNode("playerCamera1Node"));
 			//
-			sm.getSceneNode("MainCameraNode").setLocalPosition(0.0f, 0.0f, 0.0f);
-			sm.getSceneNode("MainCameraNode").setLocalRotation(sm.getRootSceneNode().getLocalRotation());
+			sm.getSceneNode("playerCamera1Node").setLocalPosition(0.0f, 0.0f, 0.0f);
+			sm.getSceneNode("playerCamera1Node").setLocalRotation(sm.getRootSceneNode().getLocalRotation());
 			//
-			game.setActiveNode(sm.getSceneNode("dolphinNode"));
+			game.setActiveNode(sm.getSceneNode("dolphin1Node"));
 
 		}
 		onDolphin = !onDolphin;

@@ -2,7 +2,7 @@ newmtl DefaultMaterial
 # shininess
 Ns 75
 # ambient
-Ka 1.000000 1.000000 1.000000
+Ka 1.000000 0.200000 0.200000
 # diffuse
 Kd 1.00000 1.00000 1.00000
 # specular
